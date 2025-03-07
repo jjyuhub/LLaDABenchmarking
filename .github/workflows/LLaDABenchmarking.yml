@@ -1,0 +1,171 @@
+# Workflow name describing its purpose
+name: LLaDA Benchmarking and Profiling Workflow
+
+# Define events that trigger the workflow
+on:
+  # Trigger on push events to the main branch
+  push:
+    branches:
+      - main
+  # Allow manual triggering from the GitHub UI
+  workflow_dispatch:
+
+# Define jobs to be executed
+jobs:
+  # Job name for benchmarking and profiling
+  benchmark_and_profile:
+    # Human-readable name for the job
+    name: Benchmark and Profile LLaDA Model
+    # Specify the runner environment (Ubuntu, CPU-only by default)
+    runs-on: ubuntu-latest
+    # Define timeout to prevent hanging (in minutes)
+    timeout-minutes: 60
+
+    # Define steps within the job
+    steps:
+      # Step 1: Clone the LLaDA repository
+      - name: Clone LLaDA Repository
+        run: |
+          echo "Cloning the LLaDA repository from GitHub..."
+          git clone https://github.com/ML-GSAI/LLaDA
+          cd LLaDA
+          echo "Repository cloned successfully into directory: $(pwd)"
+
+      # Step 2: Set up Python environment with v4
+      - name: Set Up Python 3.8 Environment
+        uses: actions/setup-python@v4  # Updated to @v4 (latest stable as of prior knowledge)
+        with:
+          # Specify Python version
+          python-version: '3.8'
+          # Cache pip dependencies for faster runs
+          cache: 'pip'
+
+      # Step 3: Install system-level dependencies
+      - name: Install System Dependencies
+        run: |
+          echo "Installing system-level dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          echo "System dependencies installed successfully."
+
+      # Step 4: Install requirements.txt or fallback dependencies
+      - name: Install Python Dependencies
+        run: |
+          echo "Installing Python dependencies..."
+          pip install --upgrade pip
+          # Check if requirements.txt exists in the cloned repo
+          if [ -f "LLaDA/requirements.txt" ]; then
+            echo "Found requirements.txt, installing dependencies from it..."
+            pip install -r LLaDA/requirements.txt
+          else
+            echo "No requirements.txt found, installing minimal dependencies for LLaDA..."
+            pip install torch transformers==4.38.2
+          fi
+          echo "Dependencies installed successfully."
+
+      # Step 5: Verify installed packages
+      - name: Verify Installed Packages
+        run: |
+          echo "Verifying Python version..."
+          python --version
+          echo "Verifying pip version..."
+          pip --version
+          echo "Listing installed packages..."
+          pip list
+
+      # Step 6: Run benchmarking
+      - name: Execute Benchmarking
+        run: |
+          echo "Starting benchmarking process..."
+          python -c "
+          import time
+          from transformers import AutoModelForCausalLM, AutoTokenizer
+
+          # Load model and tokenizer from Hugging Face
+          print('Loading model and tokenizer...')
+          model = AutoModelForCausalLM.from_pretrained('GSAI-ML/LLaDA-8B-Base', trust_remote_code=True, torch_dtype='bfloat16')
+          tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Base', trust_remote_code=True)
+
+          # Define prompt
+          prompt = 'Write a Python function to sort a list.'
+          inputs = tokenizer(prompt, return_tensors='pt')
+
+          # Benchmark inference
+          print('Running inference...')
+          start_time = time.time()
+          outputs = model.generate(**inputs, max_length=50)
+          end_time = time.time()
+
+          # Decode output and count tokens
+          generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+          num_tokens = len(tokenizer.encode(generated_text))
+          elapsed_time = end_time - start_time
+
+          # Calculate tokens per second
+          tokens_per_sec = num_tokens / elapsed_time if elapsed_time > 0 else 0
+          print(f'Generated text: {generated_text}')
+          print(f'Number of tokens: {num_tokens}')
+          print(f'Time taken: {elapsed_time:.2f} seconds')
+          print(f'Tokens per second: {tokens_per_sec:.2f}')
+
+          # Save results
+          with open('benchmark_results.txt', 'w') as f:
+              f.write(f'Generated text: {generated_text}\n')
+              f.write(f'Number of tokens: {num_tokens}\n')
+              f.write(f'Time taken: {elapsed_time:.2f} seconds\n')
+              f.write(f'Tokens per second: {tokens_per_sec:.2f}\n')
+          "
+          echo "Benchmarking completed. Results saved to benchmark_results.txt."
+
+      # Step 7: Upload benchmark results
+      - name: Upload Benchmark Results Artifact
+        uses: actions/upload-artifact@v4  # Updated to @v4 (latest as of March 2025 context)
+        with:
+          name: benchmark-results
+          path: benchmark_results.txt
+          retention-days: 7
+        continue-on-error: true
+
+      # Step 8: Run profiling
+      - name: Execute Profiling
+        run: |
+          echo "Starting profiling process..."
+          python -c "
+          import torch
+          from transformers import AutoModelForCausalLM, AutoTokenizer
+
+          # Load model and tokenizer
+          print('Loading model and tokenizer for profiling...')
+          model = AutoModelForCausalLM.from_pretrained('GSAI-ML/LLaDA-8B-Base', trust_remote_code=True, torch_dtype='bfloat16')
+          tokenizer = AutoTokenizer.from_pretrained('GSAI-ML/LLaDA-8B-Base', trust_remote_code=True)
+
+          # Define prompt
+          prompt = 'Write a Python function to sort a list.'
+          inputs = tokenizer(prompt, return_tensors='pt')
+
+          # Profile inference
+          print('Running profiling...')
+          with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU]) as prof:
+              outputs = model.generate(**inputs, max_length=50)
+
+          # Save profiling results
+          profiling_output = prof.key_averages().table(sort_by='cpu_time_total')
+          print(profiling_output)
+          with open('profiling_results.txt', 'w') as f:
+              f.write(profiling_output)
+          "
+          echo "Profiling completed. Results saved to profiling_results.txt."
+
+      # Step 9: Upload profiling results
+      - name: Upload Profiling Results Artifact
+        uses: actions/upload-artifact@v4  # Updated to @v4
+        with:
+          name: profiling-results
+          path: profiling_results.txt
+          retention-days: 7
+        continue-on-error: true
+
+      # Step 10: Final status
+      - name: Workflow Completion Notification
+        run: |
+          echo "Benchmarking and profiling workflow completed successfully!"
