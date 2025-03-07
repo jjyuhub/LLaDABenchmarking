@@ -37,46 +37,45 @@ jobs:
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install transformers==4.38.2 numpy
 
-      - name: Run Benchmarking
-        run: |
-          source venv/bin/activate
-          python - <<EOF
-          import time
-          import torch
-          from transformers import AutoModel, AutoTokenizer
+    - name: Run Benchmarking
+      run: |
+        source venv/bin/activate
+        python - <<EOF
+        import time
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+    
+        MODEL_NAME = "GSAI-ML/LLaDA-8B-Base"
+        FALLBACK_MODEL = "meta-llama/Llama-2-7b"
+    
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True, force_download=False, revision="main")
+            model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True, force_download=False, revision="main", torch_dtype=torch.bfloat16)
+        except RuntimeError as e:
+            print(f"Memory error: {e}\nFalling back to smaller model.")
+            tokenizer = AutoTokenizer.from_pretrained(FALLBACK_MODEL, trust_remote_code=True)
+            model = AutoModel.from_pretrained(FALLBACK_MODEL, trust_remote_code=True)
+    
+        model.eval()
+    
+        prompt = "Write a Python function to sort a list."
+        input_ids = tokenizer(prompt, return_tensors="pt")["input_ids"]
+    
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        start_time = time.time()
+        output_ids = model.generate(input_ids, max_length=128)
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        end_time = time.time()
+    
+        num_generated_tokens = len(output_ids[0]) - len(input_ids[0])
+        tokens_per_second = num_generated_tokens / (end_time - start_time)
+    
+        output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        print(f"Generated Output:\n{output_text}\n")
+        print(f"Tokens Generated: {num_generated_tokens}")
+        print(f"Inference Speed: {tokens_per_second:.2f} tokens/sec")
+        EOF
 
-          # Load model and tokenizer
-          MODEL_NAME = "GSAI-ML/LLaDA-8B-Base"  # Fallback: "meta-llama/Llama-2-7b"
-          try:
-              tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-              model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True)
-          except Exception as e:
-              print("Model loading failed. Using fallback model.")
-              tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b")
-              model = AutoModel.from_pretrained("meta-llama/Llama-2-7b")
-
-          model.eval()  # Ensure model is in evaluation mode
-
-          # Prepare input
-          prompt = "Write a Python function to sort a list."
-          input_ids = tokenizer(prompt, return_tensors="pt")["input_ids"]
-
-          # Measure inference time
-          torch.cuda.synchronize() if torch.cuda.is_available() else None
-          start_time = time.time()
-          output_ids = model.generate(input_ids, max_length=128)
-          torch.cuda.synchronize() if torch.cuda.is_available() else None
-          end_time = time.time()
-
-          # Token counting for accuracy
-          num_generated_tokens = len(output_ids[0]) - len(input_ids[0])
-          tokens_per_second = num_generated_tokens / (end_time - start_time)
-
-          output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-          print(f"Generated Output:\n{output_text}\n")
-          print(f"Tokens Generated: {num_generated_tokens}")
-          print(f"Inference Speed: {tokens_per_second:.2f} tokens/sec")
-          EOF
 
       - name: Profile Model Inference (CPU only)
         run: |
