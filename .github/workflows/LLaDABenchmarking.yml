@@ -5,7 +5,6 @@ on:
     branches:
       - self-hosted
   pull_request:
-    branches:
       - self-hosted
   workflow_dispatch:  # Allows manual triggering
 
@@ -37,14 +36,14 @@ jobs:
         run: |
           python -m venv venv
           venv\Scripts\activate
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip wheel setuptools
 
       - name: Install dependencies
         run: |
           venv\Scripts\activate
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121  # CUDA 12.1
           pip install transformers==4.38.2 numpy
-          pip install --upgrade huggingface_hub flash-attn --no-build-isolation
+          pip install --upgrade huggingface_hub
 
       - name: Create Python Benchmark Script
         run: |
