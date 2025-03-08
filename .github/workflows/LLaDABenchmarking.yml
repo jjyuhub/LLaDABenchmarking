@@ -1,17 +1,17 @@
-name: LLaDA Benchmarking
+name: LLaDA Benchmarking (macOS)
 
 on:
   push:
     branches:
-      - main
+      - macos-latest
   pull_request:
     branches:
-      - main
+      - macos-latest
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest  # Use ubuntu-20.04-xl if available for more RAM
+    runs-on: macos-latest  # Use the latest macOS runner
 
     steps:
       - name: Checkout repository
@@ -19,8 +19,8 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git python3 python3-pip
+          brew update
+          brew install git python3
 
       - name: Clone LLaDA repository
         run: git clone https://github.com/ML-GSAI/LLaDA.git
@@ -64,21 +64,18 @@ jobs:
           input_ids = tokenizer(prompt, return_tensors="pt")["input_ids"]
 
           # Ensure attention_mask is set to avoid unexpected behavior
-          attention_mask = torch.ones_like(input_ids)  # Since padding is unknown, assume no padding
+          attention_mask = torch.ones_like(input_ids)
 
-          # LLaDA-Specific: Use Custom Diffusion-Based Generation
           if "llada" in MODEL_NAME.lower():
-              from LLaDA.generate import generate  # Import LLaDA's custom generation function
+              from LLaDA.generate import generate
 
               start_time = time.time()
               output_ids = generate(model, input_ids, steps=128, gen_length=128, block_length=32, 
                                     temperature=0.0, cfg_scale=0.0, remasking='low_confidence')
               end_time = time.time()
 
-              # Extract generated tokens beyond prompt length
               num_generated_tokens = output_ids.shape[1] - input_ids.shape[1]
           else:
-              # Fallback to standard generate() for other models
               start_time = time.time()
               output_ids = model.generate(input_ids, max_length=128, attention_mask=attention_mask)
               end_time = time.time()
@@ -86,8 +83,6 @@ jobs:
               num_generated_tokens = len(output_ids[0]) - len(input_ids[0])
 
           tokens_per_second = num_generated_tokens / (end_time - start_time)
-
-          # Decode and print output
           output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
           print(f"Generated Output:\n{output_text}\n")
           print(f"Tokens Generated: {num_generated_tokens}")
