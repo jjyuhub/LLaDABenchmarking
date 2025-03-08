@@ -16,7 +16,17 @@ jobs:
     steps:
       - name: Install system dependencies
         run: |
-          choco install git python --yes
+          if (-Not (Get-Command git -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/latest/download/Git-64-bit.exe" -OutFile "Git-Installer.exe"
+              Start-Process -Wait -FilePath "Git-Installer.exe" -ArgumentList "/VERYSILENT"
+              Remove-Item "Git-Installer.exe"
+          }
+
+          if (-Not (Get-Command python -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe" -OutFile "Python-Installer.exe"
+              Start-Process -Wait -FilePath "Python-Installer.exe" -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1"
+              Remove-Item "Python-Installer.exe"
+          }
 
       - name: Clone LLaDA repository
         run: |
