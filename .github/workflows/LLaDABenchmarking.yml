@@ -5,6 +5,7 @@ on:
     branches:
       - self-hosted
   pull_request:
+    branches:
       - self-hosted
   workflow_dispatch:  # Allows manual triggering
 
