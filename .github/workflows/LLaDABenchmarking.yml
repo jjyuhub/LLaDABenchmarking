@@ -3,10 +3,10 @@ name: LLaDA Benchmarking (Windows GPU)
 on:
   push:
     branches:
-      - main
+      - self-hosted
   pull_request:
     branches:
-      - main
+      - self-hosted
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
@@ -14,6 +14,14 @@ jobs:
     runs-on: [self-hosted, Windows, GPU]  # Runs on a local Windows runner with GPU
 
     steps:
+      - name: Install system dependencies
+        run: |
+          choco install git python --yes
+
+      - name: Clone LLaDA repository
+        run: |
+          git clone https://github.com/ML-GSAI/LLaDA.git
+
       - name: Set up Python environment
         run: |
           python -m venv venv
@@ -25,20 +33,6 @@ jobs:
           venv\Scripts\activate
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121  # CUDA 12.1
           pip install transformers==4.38.2 numpy
-
-      - name: Clone LLaDA repository
-        run: |
-          git clone https://github.com/ML-GSAI/LLaDA.git
-
-      - name: Install LLaDA dependencies
-        run: |
-          venv\Scripts\activate
-          pip install -e LLaDA
-
-      - name: Check GPU Availability
-        run: |
-          venv\Scripts\activate
-          python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
 
       - name: Create Python Benchmark Script
         run: |
