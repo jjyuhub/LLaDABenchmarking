@@ -30,6 +30,7 @@ jobs:
 
       - name: Clone LLaDA repository
         run: |
+          if (Test-Path "LLaDA") { Remove-Item -Recurse -Force "LLaDA" }
           git clone https://github.com/ML-GSAI/LLaDA.git
 
       - name: Set up Python environment
