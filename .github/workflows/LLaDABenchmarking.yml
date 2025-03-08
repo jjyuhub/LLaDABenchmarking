@@ -104,7 +104,7 @@ jobs:
 
           # Decode and print output
           output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-          output_text = output_text.split("\n")[0]  # Keep only the first generated output
+          output_text = output_text.replace(prompt, "").strip()  # Remove redundant prompt
           print(f"Generated Output:\n{output_text}\n")
           print(f"Tokens Generated: {num_generated_tokens}")
           print(f"Inference Speed: {tokens_per_second:.2f} tokens/sec")
